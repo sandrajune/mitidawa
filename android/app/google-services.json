@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "399528666814",
+    "project_id": "mitishamba-758db",
+    "storage_bucket": "mitishamba-758db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:399528666814:android:a2863638e092a09cd3e0ef",
+        "android_client_info": {
+          "package_name": "com.example.mitidawa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5jG8lI07FfQVjO9INpPPdViDs7NJ59hE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

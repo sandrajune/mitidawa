@@ -1,0 +1,9 @@
+- [x] Update `lib/main.dart` to route app entry to `CameraScreen`
+- [x] Verify camera flow shows predicted plant name + confidence
+- [x] Run `flutter analyze` and fix any surfaced issues
+- [x] Patch `android/app/build.gradle.kts` to include ABI filters and compatible NDK settings for TFLite emulator loading
+- [x] Patch `camera_screen.dart` startup/model-loading to prevent model-load failure confusion and surface retry/loading UX
+- [x] Re-run `flutter analyze` after model-loading fix
+- [ ] Redesign prediction result UI with plant/leaf theme (greens + light brown/dark orange accents)
+- [ ] Add confidence bubble pop-up style visual treatment
+- [ ] Re-run `flutter analyze` after UI/UX redesign

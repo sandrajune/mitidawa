@@ -1,0 +1,40 @@
+  Aloe barbadensis
+  Areca catechu
+  Azadirachta indica
+  Bacopa monnieri
+  Bambusa vulgaris
+  Basella rubra
+  Calotropis gigantea
+  Carica papaya
+  Catharanthus roseus
+  Citrus limon
+  Costus igneus
+  Cymbopogon citratus
+  Ficus religiosa
+  Geranium
+  Hibiscus rosa-sinensis
+  Jasminum officinale
+  Lawsonia inermis
+  Mangifera indica
+  Manilkara zapota
+  Mentha piperita
+  Morinda citrifolia
+  Murraya koenigii
+  Ocimum tenuiflorum
+  Oxalis latifolia
+  Persea americana
+  Phyllanthus emblica
+  Piper betle
+  Piper nigrum
+  Plectranthus amboinicus
+  Pongamia pinnata
+  Psidium guajava
+  Punica granatum
+  Raktachandini
+  Ricinus communis
+  Rubus rosifolius
+  Ruta graveolens L.
+  Saraca asoca
+  Solanum nigrum
+  Tinospora cordifolia
+  Withania somnifera

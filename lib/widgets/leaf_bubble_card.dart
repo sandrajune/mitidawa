@@ -13,7 +13,7 @@ class LeafBubbleCard extends StatelessWidget {
     required this.subtitle,
     required this.color,
     this.onTap,
-    this.rotation = 0,
+    this.rotation = 0, required BorderRadius borderRadius, required Border border,
   });
 
   @override
@@ -24,8 +24,8 @@ class LeafBubbleCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(40),
         onTap: onTap,
         child: Container(
-          width: 150,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+          width: 170,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
           decoration: BoxDecoration(
             color: color,
             borderRadius: const BorderRadius.only(

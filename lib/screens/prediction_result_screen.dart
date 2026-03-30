@@ -1,11 +1,126 @@
 import 'package:flutter/material.dart';
+
 import '../models/plant.dart';
 import '../theme/app_colors.dart';
 
-class PlantDetailScreen extends StatelessWidget {
+class PredictionResultScreen extends StatelessWidget {
+  final Plant? plant;
+  final double confidence;
+  final String? message;
+
+  const PredictionResultScreen({
+    super.key,
+    required this.plant,
+    required this.confidence,
+    this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPrediction = plant != null && confidence >= 0.75;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F5EF),
+      appBar: AppBar(
+        title: const Text('Prediction Result'),
+        backgroundColor: const Color.fromARGB(255, 18, 54, 45),
+        foregroundColor: Colors.white,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF558B6E).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0xFF558B6E),
+                    width: 1.2,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Confidence Score',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: Color.fromARGB(255, 18, 54, 45),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${(confidence * 100).toStringAsFixed(1)}%',
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        color: Color.fromARGB(255, 91, 45, 23),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              if (!hasPrediction) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color.fromARGB(255, 91, 45, 23),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.info_outline,
+                        size: 34,
+                        color: Color.fromARGB(255, 91, 45, 23),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'No predicted plant',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Color.fromARGB(255, 18, 54, 45),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        message ??
+                            'Take a Picture of a Plant for Prediction.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color.fromARGB(255, 91, 45, 23),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                _PlantShowcase(plant: plant!),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlantShowcase extends StatelessWidget {
   final Plant plant;
 
-  const PlantDetailScreen({super.key, required this.plant});
+  const _PlantShowcase({required this.plant});
 
   @override
   Widget build(BuildContext context) {
@@ -14,47 +129,33 @@ class PlantDetailScreen extends StatelessWidget {
       plant.detailImageUrl.trim(),
     ].where((url) => url.isNotEmpty).toList();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Color.fromARGB(255, 18, 54, 45),
-        foregroundColor: Colors.white,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            children: [
-              const SizedBox(height: 20),
-              Text(
-                plant.name,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.jungleGreen,
-                ),
-              ),
-              const SizedBox(height: 20),
-              _imageCarousel(imageUrls),
-              const SizedBox(height: 18),
-              _bubble('Scientific Name', plant.scientificName),
-              _bubble('Description', plant.description),
-              _localNamesBubble(plant.localNames),
-              _usesBubble(plant.uses),
-              const SizedBox(height: 20),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.sunsetOrangeDark,
-                  side: const BorderSide(
-                      color: Color.fromARGB(234, 219, 189, 135)),
-                ),
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Back to Catalogue'),
-              ),
-            ],
+    return Column(
+      children: [
+        const Text(
+          'MITI DAWA',
+          style: TextStyle(
+            fontSize: 34,
+            fontWeight: FontWeight.w900,
+            color: AppColors.jungleGreenDark,
           ),
         ),
-      ),
+        const SizedBox(height: 20),
+        Text(
+          plant.name,
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            color: AppColors.jungleGreen,
+          ),
+        ),
+        const SizedBox(height: 20),
+        _imageCarousel(imageUrls),
+        const SizedBox(height: 18),
+        _bubble('Scientific Name', plant.scientificName),
+        _bubble('Description', plant.description),
+        _localNamesBubble(plant.localNames),
+        _usesBubble(plant.uses),
+      ],
     );
   }
 
@@ -93,9 +194,7 @@ class PlantDetailScreen extends StatelessWidget {
                     fit: BoxFit.cover,
                     loadingBuilder: (context, child, progress) {
                       if (progress == null) return child;
-                      return const Center(
-                        child: CircularProgressIndicator(),
-                      );
+                      return const Center(child: CircularProgressIndicator());
                     },
                     errorBuilder: (context, error, stackTrace) {
                       return const Center(
@@ -222,18 +321,19 @@ class PlantDetailScreen extends StatelessWidget {
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
-              fontSize: 18,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           for (final line in useLines)
             Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
+              padding: const EdgeInsets.only(bottom: 4.0),
               child: RichText(
                 text: TextSpan(
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 16, height: 1.4),
-                  children: _parseUseLine(line),
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  children: [
+                    const TextSpan(text: '• '),
+                    ..._parseUseLine(line),
+                  ],
                 ),
               ),
             ),
@@ -242,62 +342,40 @@ class PlantDetailScreen extends StatelessWidget {
     );
   }
 
-  // Smarter parser that recognizes {category: X, description: Y} format
   List<String> _normalizeListText(String value) {
     final raw = value.trim();
     if (raw.isEmpty) return [];
 
-    // 1. If the text contains curly braces, it's a list of objects!
-    if (raw.contains('{') && raw.contains('}')) {
-      // Extract everything inside each set of {} brackets
-      final matches = RegExp(r'\{([^}]+)\}').allMatches(raw);
-      if (matches.isNotEmpty) {
-        return matches.map((m) => m.group(1)!.trim()).toList();
-      }
+    if (raw.startsWith('[') && raw.endsWith(']')) {
+      final inner = raw.substring(1, raw.length - 1).trim();
+      if (inner.isEmpty) return [];
+      return inner
+          .split(RegExp(r'","|",\s*"|' ',s*' '|",s*|' ',s*'))
+          .expand((part) => part.split(RegExp(r'[,\n\r]+')))
+          .map((e) => e.replaceAll('"', '').replaceAll("'", '').trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
     }
 
-    // 2. Fallback for standard arrays (strips [] brackets)
-    String cleaned = raw.replaceAll('[', '').replaceAll(']', '');
-    return cleaned
+    return raw
         .split(RegExp(r'[,\n\r]+'))
         .map((e) => e.replaceAll('"', '').replaceAll("'", '').trim())
         .where((e) => e.isNotEmpty)
         .toList();
   }
 
-  // Automatically detects "category:" and "description:" keywords
-  // Automatically detects "category:" and "description:" keywords
   List<TextSpan> _parseUseLine(String line) {
-    String lowerLine = line.toLowerCase();
-    
-    // Check if the string has the specific map structure from the database
-    if (lowerLine.contains('category:') && lowerLine.contains('description:')) {
-      
-      // FIX: Using Dart's official 'caseSensitive: false' instead of '(?i)'
-      final catMatch = RegExp(r'category:\s*([^,]+)', caseSensitive: false).firstMatch(line);
-      final descMatch = RegExp(r'description:\s*(.+)', caseSensitive: false).firstMatch(line);
-
-      final catText = catMatch != null ? catMatch.group(1)!.trim() : 'Use';
-      final descText = descMatch != null ? descMatch.group(1)!.trim() : line;
-
-      return [
-        TextSpan(text: catText, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const TextSpan(text: ': '),
-        TextSpan(text: descText),
-      ];
-    }
-
-    // Normal fallback for regular strings
     final colonIndex = line.indexOf(':');
     if (colonIndex == -1) {
-      return [TextSpan(text: line.replaceFirst(RegExp(r'^[\d\.\-\*\)]+\s*'), ''))];
+      return [TextSpan(text: line)];
     }
-    
-    final category = line.substring(0, colonIndex).replaceFirst(RegExp(r'^[\d\.\-\*\)]+\s*'), '').trim();
+    final category = line.substring(0, colonIndex).trim();
     final desc = line.substring(colonIndex + 1).trim();
-    
     return [
-      TextSpan(text: category, style: const TextStyle(fontWeight: FontWeight.bold)),
+      TextSpan(
+        text: category,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
       const TextSpan(text: ': '),
       TextSpan(text: desc),
     ];

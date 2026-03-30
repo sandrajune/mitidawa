@@ -7,6 +7,11 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image/image.dart' as img;
 
+import '../models/plant.dart';
+import '../services/plant_service.dart';
+import '../services/scan_history_service.dart';
+import 'prediction_result_screen.dart';
+
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -23,15 +28,19 @@ class _CameraScreenState extends State<CameraScreen> {
   double _confidence = 0.0;
   String? _errorMessage;
   bool _isModelLoading = false;
+  final PlantService _plantService = PlantService();
+  final ScanHistoryService _scanHistoryService = ScanHistoryService();
+  List<Plant> _catalogPlants = [];
+  Plant? _matchedPlant;
 
   Color _confidenceColor(double confidence) {
-    if (confidence >= 0.80) return const Color(0xFF2E7D32);
-    if (confidence >= 0.35) return const Color(0xFFEF6C00);
-    return const Color(0xFF8D6E63);
+    if (confidence >= 0.75) return const Color(0xFF558B6E);
+    if (confidence >= 0.35) return const Color.fromARGB(255, 91, 45, 23);
+    return const Color.fromARGB(255, 18, 54, 45);
   }
 
   String _confidenceLabel(double confidence) {
-    if (confidence >= 0.80) return 'High confidence';
+    if (confidence >= 0.75) return 'High confidence';
     if (confidence >= 0.35) return 'Medium confidence';
     return 'Low confidence';
   }
@@ -41,10 +50,29 @@ class _CameraScreenState extends State<CameraScreen> {
     super.initState();
     _loadModel();
     _requestPermissions();
+    _loadCatalogPlants();
   }
 
   Future<void> _requestPermissions() async {
     await [Permission.camera, Permission.photos].request();
+  }
+
+  Future<void> _loadCatalogPlants() async {
+    final plants = await _plantService.fetchPlants();
+    if (!mounted) return;
+    setState(() {
+      _catalogPlants = plants;
+    });
+  }
+
+  Plant? _findPlantByLabel(String label) {
+    final normalizedLabel = label.trim().toLowerCase();
+    for (final plant in _catalogPlants) {
+      if (plant.name.trim().toLowerCase() == normalizedLabel) {
+        return plant;
+      }
+    }
+    return null;
   }
 
   Future<void> _loadModel() async {
@@ -120,11 +148,27 @@ class _CameraScreenState extends State<CameraScreen> {
       final result = await predict(_image!);
       if (!mounted || result == null) return;
 
+      final predictedPlantName = result['plant'] as String?;
+      final confidenceValue = (result['confidence'] as double?) ?? 0.0;
+      final matchedPlant = predictedPlantName == null
+          ? null
+          : _findPlantByLabel(predictedPlantName);
+
       setState(() {
-        _prediction = (result['plant'] as String?) ?? 'Unknown';
-        _confidence = (result['confidence'] as double?) ?? 0.0;
+        _prediction = predictedPlantName ?? 'No predicted plant';
+        _confidence = confidenceValue;
         _predictionMessage = result['message'] as String?;
+        _matchedPlant = matchedPlant;
       });
+
+      await _scanHistoryService.addEntry(
+        ScanHistoryEntry(
+          plantName: matchedPlant?.name,
+          confidence: confidenceValue,
+          message: _predictionMessage,
+          timestamp: DateTime.now(),
+        ),
+      );
     }
   }
 
@@ -205,10 +249,14 @@ class _CameraScreenState extends State<CameraScreen> {
     final safeIndex = _labels.isEmpty ? 0 : min(maxIndex, _labels.length - 1);
     final predictedLabel = _labels.isNotEmpty ? _labels[safeIndex] : 'Unknown';
 
-    const double confidenceThreshold = 0.80;
+    const double confidenceThreshold = 0.75;
     const double nonPlantThreshold = 0.35;
 
-    if (maxProb >= confidenceThreshold) {
+    final inTestedSet = _labels.any(
+      (l) => l.trim().toLowerCase() == predictedLabel.trim().toLowerCase(),
+    );
+
+    if (maxProb >= confidenceThreshold && inTestedSet) {
       return {
         'plant': predictedLabel,
         'confidence': maxProb,
@@ -224,11 +272,11 @@ class _CameraScreenState extends State<CameraScreen> {
       };
     } else {
       return {
-        'plant': predictedLabel,
+        'plant': null,
         'confidence': maxProb,
         'isConfident': false,
         'message':
-            'Low confidence (${(maxProb * 100).toStringAsFixed(1)}%). Try a clearer, closer photo.',
+            'Low confidence (${(maxProb * 100).toStringAsFixed(1)}%). Prediction hidden below 75%.',
       };
     }
   }
@@ -241,7 +289,7 @@ class _CameraScreenState extends State<CameraScreen> {
       backgroundColor: const Color(0xFFF7F5EF),
       appBar: AppBar(
         title: const Text('Scan Plant'),
-        backgroundColor: const Color(0xFF2E7D32),
+        backgroundColor: const Color.fromARGB(255, 18, 54, 45),
         foregroundColor: Colors.white,
       ),
       body: Center(
@@ -258,7 +306,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       ? const Color(0xFFFFE0B2)
                       : (_errorMessage != null
                           ? const Color(0xFFD7CCC8)
-                          : const Color(0xFFC8E6C9)),
+                          : const Color(0xFF558B6E).withOpacity(0.2)),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -294,7 +342,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 const SizedBox(height: 16),
               ],
               if (_isModelLoading) ...[
-                const CircularProgressIndicator(color: Color(0xFF2E7D32)),
+                const CircularProgressIndicator(color: Color(0xFF558B6E)),
                 const SizedBox(height: 12),
                 const Text('Preparing leaf model...'),
                 const SizedBox(height: 20),
@@ -350,19 +398,6 @@ class _CameraScreenState extends State<CameraScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Text(
-                      _prediction == "No prediction yet"
-                          ? (_errorMessage == null
-                              ? "No prediction yet"
-                              : "No prediction yet (model failed to load)")
-                          : _prediction,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1B5E20),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -381,50 +416,43 @@ class _CameraScreenState extends State<CameraScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 350),
-                      curve: Curves.easeOutBack,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(30),
-                        border: Border.all(
-                            color: const Color(0xFF66BB6A), width: 1),
-                      ),
-                      child: const Text(
-                        '🌿 Confidence bubble',
-                        style: TextStyle(
-                          color: Color(0xFF2E7D32),
-                          fontWeight: FontWeight.w600,
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => PredictionResultScreen(
+                              plant: _matchedPlant,
+                              confidence: _confidence,
+                              message: _predictionMessage,
+                            ),
+                          ),
+                        );
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 350),
+                        curve: Curves.easeOutBack,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF558B6E).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(
+                            color: const Color.fromARGB(255, 18, 54, 45),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Text(
+                          '🌿 Predicted Plant (tap to view)',
+                          style: TextStyle(
+                            color: Color.fromARGB(255, 18, 54, 45),
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              if (_predictionMessage != null) ...[
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0),
-                    borderRadius: BorderRadius.circular(14),
-                    border:
-                        Border.all(color: const Color(0xFFFFB74D), width: 1),
-                  ),
-                  child: Text(
-                    _predictionMessage!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFFE65100),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
               if (_errorMessage != null) ...[
                 const SizedBox(height: 12),
                 OutlinedButton.icon(

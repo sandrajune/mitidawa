@@ -1,9 +1,25 @@
-- [x] Update `lib/main.dart` to route app entry to `CameraScreen`
-- [x] Verify camera flow shows predicted plant name + confidence
-- [x] Run `flutter analyze` and fix any surfaced issues
-- [x] Patch `android/app/build.gradle.kts` to include ABI filters and compatible NDK settings for TFLite emulator loading
-- [x] Patch `camera_screen.dart` startup/model-loading to prevent model-load failure confusion and surface retry/loading UX
-- [x] Re-run `flutter analyze` after model-loading fix
-- [ ] Redesign prediction result UI with plant/leaf theme (greens + light brown/dark orange accents)
-- [ ] Add confidence bubble pop-up style visual treatment
-- [ ] Re-run `flutter analyze` after UI/UX redesign
+- [x] Fix `lib/main.dart` import path for AuthScreen
+- [x] Remove duplicate `build` method in `MyApp`
+- [x] Set `MaterialApp.home` to `AuthScreen`
+- [x] Run `flutter analyze` to verify errors
+- [x] Add logout flow in `lib/screens/plant_assistant_screen.dart`
+- [x] Re-run `flutter analyze` after logout changes
+- [x] Add scan history model/service for persistent local storage
+- [x] Create prediction result screen with top confidence section and plant showcase
+- [x] Create scan history screen and connect from profile screen
+- [x] Update camera screen: clickable confidence bubble navigation, 75% threshold, tested-plants filtering, save scan history
+- [x] Update profile screen to open scan history
+- [ ] Apply requested bubble/theme colors to health conditions, plant catalogue, and plant detail consistency
+- [ ] Increase visual width/layout for plant catalogue and health condition sections
+- [ ] Update profile colors (keep brown top app bar, keep disclaimer behavior/content)
+- [ ] Add shared_preferences dependency and resolve touched-file analyzer issues
+- [ ] Run flutter analyze and fix issues
+- [x] Auth fix: add input validation in `lib/screens/auth_screen.dart`
+- [x] Auth fix: login should only continue on valid session
+- [x] Auth fix: signup should handle email confirmation/session correctly
+- [x] Auth fix: improve Supabase auth error messages and loading guards
+- [ ] Run `flutter analyze` after auth fixes
+- [ ] Diagnose and improve plant catalogue loading errors (`lib/services/plant_service.dart`)
+- [ ] Improve chatbot failure diagnostics/messages (`lib/screens/plant_assistant_screen.dart`)
+- [ ] Add empty/error fallback UI for catalogue (`lib/screens/plant_catalogue_screen.dart`)
+- [ ] Run `flutter analyze` after connectivity diagnostics fixes

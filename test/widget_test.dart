@@ -1,24 +1,21 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mitidawa/main.dart';
+import 'package:mitidawa/screens/home_screen.dart';
 
 void main() {
-  testWidgets('Home screen renders expected content',
+  testWidgets('Home screen renders two primary actions and chatbot FAB',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
-    await tester.pump();
-
-    expect(find.text('Mitidawa 🌿'), findsOneWidget);
-    expect(find.text('Firebase Connected!'), findsOneWidget);
-    expect(
-      find.text('Ready for plant ID, catalogue & medicinal uses'),
-      findsOneWidget,
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: HomeScreen(),
+      ),
     );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to MitiDawa'), findsOneWidget);
+    expect(find.text('Plant Catalogue'), findsOneWidget);
+    expect(find.text('Health Conditions'), findsOneWidget);
+    expect(find.byIcon(Icons.spa), findsWidgets);
   });
 }

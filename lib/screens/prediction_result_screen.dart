@@ -96,7 +96,7 @@ class PredictionResultScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         message ??
-                            'Take a Picture of a Plant for Prediction.',
+                            'High Uncertainty. Try Scanning Plant for Prediction.',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Color.fromARGB(255, 91, 45, 23),
@@ -132,7 +132,7 @@ class _PlantShowcase extends StatelessWidget {
     return Column(
       children: [
         const Text(
-          'MITI DAWA',
+          '',
           style: TextStyle(
             fontSize: 34,
             fontWeight: FontWeight.w900,

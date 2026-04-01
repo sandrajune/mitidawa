@@ -1,10 +1,12 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_screen.dart';
 import 'scan_history_screen.dart';
+import '../services/wellness_hub_service.dart';
+import 'saved_wellness_screen.dart';
+import 'my_posts_screen.dart';
 
 // --- Premium Botanical Palette ---
 class ProfilePalette {
@@ -28,10 +30,13 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _showDisclaimer = false;
+  final WellnessHubService _wellnessHubService = WellnessHubService();
+  List<Map<String, dynamic>> _savedPosts = const <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _myPublishedPosts = const <Map<String, dynamic>>[];
   
   // Settings states (Visual only for this UI, connect to backend if needed)
   bool _notificationsEnabled = true;
-  bool _darkModeEnabled = false;
+  final bool _darkModeEnabled = false;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
@@ -46,6 +51,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadUserProfile();
+    _loadSavedPosts();
+    _loadMyPublishedPosts();
+  }
+
+  Future<void> _loadSavedPosts() async {
+    final saved = await _wellnessHubService.getSavedPosts();
+    if (!mounted) return;
+    setState(() => _savedPosts = saved);
+  }
+
+  Future<void> _loadMyPublishedPosts() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final response = await supabase
+          .from('wellness_blogs')
+          .select()
+          .eq('status', 'published')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+      setState(() {
+        _myPublishedPosts = List<Map<String, dynamic>>.from(response);
+      });
+    } catch (_) {
+      // Fail silently to avoid breaking profile screen if DB schema differs
+      if (!mounted) return;
+      setState(() => _myPublishedPosts = const <Map<String, dynamic>>[]);
+    }
   }
 
   // --- Preserved Backend Logic ---
@@ -193,6 +229,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _buildIdentityCard(),
                       const SizedBox(height: 24),
                       _buildQuickActions(),
+                      const SizedBox(height: 24),
                       const SizedBox(height: 32),
                       _buildSettingsGroup(),
                       const SizedBox(height: 32),
@@ -317,28 +354,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // 2. Quick Actions
   Widget _buildQuickActions() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _QuickActionButton(
-            title: 'Saved',
-            icon: Icons.bookmark_rounded,
-            color: const Color(0xFF8B7355), // Earthy brown
-            onTap: () {
-              // Navigate to Saved Remedies
-            },
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _QuickActionButton(
+                title: 'Saved',
+                icon: Icons.bookmark_rounded,
+                color: const Color(0xFF8B7355), // Earthy brown
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SavedWellnessScreen(savedPosts: _savedPosts),
+                    ),
+                  ).then((_) {
+                    _loadSavedPosts();
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _QuickActionButton(
+                title: 'History',
+                icon: Icons.history_rounded,
+                color: ProfilePalette.accentGreen,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ScanHistoryScreen()),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _QuickActionButton(
-            title: 'History',
-            icon: Icons.history_rounded,
-            color: ProfilePalette.accentGreen,
-            onTap: () {
-              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ScanHistoryScreen()));
-            },
-          ),
+        const SizedBox(height: 16),
+        _PostsQuickActionButton(
+          posts: _myPublishedPosts,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => MyPostsScreen(posts: _myPublishedPosts),
+              ),
+            ).then((_) {
+              _loadMyPublishedPosts();
+            });
+          },
         ),
       ],
     );
@@ -510,6 +572,99 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
               Text(
                 widget.title,
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ProfilePalette.textPrimary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PostsQuickActionButton extends StatefulWidget {
+  final List<Map<String, dynamic>> posts;
+  final VoidCallback onTap;
+
+  const _PostsQuickActionButton({
+    required this.posts,
+    required this.onTap,
+  });
+
+  @override
+  State<_PostsQuickActionButton> createState() => _PostsQuickActionButtonState();
+}
+
+class _PostsQuickActionButtonState extends State<_PostsQuickActionButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.posts.length;
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            color: ProfilePalette.surfaceWhite,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: ProfilePalette.borderLight),
+            boxShadow: [
+              BoxShadow(
+                color: ProfilePalette.brandGreen.withOpacity(0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: ProfilePalette.background,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.article_rounded, color: ProfilePalette.brandGreen),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Posts',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: ProfilePalette.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      count == 0 ? 'No published posts yet' : '$count published posts',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: ProfilePalette.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: ProfilePalette.textSecondary,
               ),
             ],
           ),

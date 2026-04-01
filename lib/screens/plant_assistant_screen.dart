@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'auth_screen.dart';
+import '../services/chatbot_service.dart';
 
 class Message {
   final String text;
@@ -77,28 +78,7 @@ class _PlantAssistantScreenState extends State<PlantAssistantScreen> {
       });
 
       // 3. Ask Gemini via Edge Function
-      final response = await Supabase.instance.client.functions.invoke(
-        'chat-bot',
-        body: {'prompt': text},
-      );
-
-      final dynamic data = response.data;
-      String reply = 'Sorry, I could not generate a reply right now.';
-
-      if (response.status >= 400) {
-        final err = data is Map && data['error'] != null
-            ? data['error'].toString()
-            : 'Edge function call failed (${response.status}).';
-        throw Exception(err);
-      }
-
-      if (data is Map && data['error'] != null) {
-        throw Exception(data['error'].toString());
-      }
-
-      if (data is Map && data['reply'] != null) {
-        reply = data['reply'].toString();
-      }
+      final String reply = await sendPromptToBot(text);
 
       // 4. Update UI for Bot Reply
       setState(() {
@@ -132,6 +112,8 @@ class _PlantAssistantScreenState extends State<PlantAssistantScreen> {
       setState(() {
         _messages.add(Message(friendlyError, false));
       });
+
+      // Keep history clean: do not persist technical errors as assistant replies.
     } finally {
       if (mounted) {
         setState(() {

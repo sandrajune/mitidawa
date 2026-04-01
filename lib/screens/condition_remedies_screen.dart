@@ -80,12 +80,12 @@ class _ConditionRemediesScreenState extends State<ConditionRemediesScreen> {
                             : plant.hint,
                         color: index.isEven
                             ? AppColors.bubbleGreen
-                            : AppColors.bubbleOrange,
+                            : AppColors.bubbleGreen,
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
                           color: index.isEven
                               ? AppColors.jungleGreen
-                              : AppColors.sunsetOrangeDark,
+                              : AppColors.jungleGreen,
                         ),
                         onTap: () {
                           Navigator.push(

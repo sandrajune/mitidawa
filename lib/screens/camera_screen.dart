@@ -1,16 +1,15 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:image/image.dart' as img;
 
 import '../models/plant.dart';
 import '../services/plant_service.dart';
 import '../services/scan_history_service.dart';
+import '../services/prediction_policy.dart';
 import 'prediction_result_screen.dart';
 
 // --- Premium Botanical Palette ---
@@ -107,7 +106,7 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
 
     try {
       _interpreter?.close();
-      _interpreter = await Interpreter.fromAsset('assets/models/plant_identifier_final.tflite');
+      _interpreter = await Interpreter.fromAsset('assets/models/mitidawa_model_v2.tflite');
       final labelsData = await rootBundle.loadString('assets/labels.txt');
       _labels = labelsData.split('\n').map((line) => line.trim()).where((line) => line.isNotEmpty).toList();
       if (!mounted) return;
@@ -212,27 +211,13 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
     final safeIndex = _labels.isEmpty ? 0 : math.min(maxIndex, _labels.length - 1);
     final predictedLabel = _labels.isNotEmpty ? _labels[safeIndex] : 'Unknown';
 
-    const double confidenceThreshold = 0.45;
-const double nonPlantThreshold = 0.15;
     final inTestedSet = _labels.any((l) => l.trim().toLowerCase() == predictedLabel.trim().toLowerCase());
 
-    if (maxProb >= confidenceThreshold && inTestedSet) {
-      return {'plant': predictedLabel, 'confidence': maxProb, 'isConfident': true};
-    } else if (maxProb < nonPlantThreshold) {
-      return {
-        'plant': null,
-        'confidence': maxProb,
-        'isConfident': false,
-        'message': 'This does not look like one of the trained plants. Try a clearer leaf photo.',
-      };
-    } else {
-      return {
-        'plant': null,
-        'confidence': maxProb,
-        'isConfident': false,
-        'message': 'Low confidence (${(maxProb * 100).toStringAsFixed(1)}%). Prediction hidden below 75%.',
-      };
-    }
+    return PredictionPolicy.evaluate(
+      maxProb: maxProb,
+      predictedLabel: predictedLabel,
+      inTestedSet: inTestedSet,
+    );
   }
 
   // --- Premium UI Build ---

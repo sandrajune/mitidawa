@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'dart:ui';
 import '../models/plant.dart';
 import '../services/plant_service.dart';
 import 'plant_detail_screen.dart';

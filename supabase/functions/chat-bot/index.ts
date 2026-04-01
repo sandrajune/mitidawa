@@ -6,6 +6,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const refusalMessage = "I am the MitiDawa assistant. I can only help you with questions about medicinal plants and natural remedies."
+
+const systemPolicy = `You are the official ethnobotanical knowledge expert and assistant for the MitiDawa app.
+
+STRICT SCOPE:
+- You may ONLY provide information related to plants, medicinal plants, botany, herbalism, and natural remedies.
+- Do NOT answer any question outside plant and natural-remedy scope.
+- If the user asks anything outside this scope (politics, coding, math, general trivia, non-remedy topics, etc.), you must refuse.
+
+REFUSAL FORMAT:
+- Use this exact refusal sentence and nothing else:
+"${refusalMessage}"
+
+SAFETY:
+- For remedy-related guidance, include a brief disclaimer to consult a certified medical professional for serious conditions.
+`
+
 Deno.serve(async (req) => {
   // Handle the initial CORS preflight check from Flutter
   if (req.method === 'OPTIONS') {
@@ -26,12 +43,18 @@ Deno.serve(async (req) => {
       throw new Error("Missing API Key");
     }
 
-    console.log("3. Sending question to Gemini...");
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
+        system_instruction: { 
+          parts: [{ text: systemPolicy }],
+        },
+        contents: [{
+          parts: [{
+            text: `User prompt: ${prompt}`,
+          }],
+        }],
       }),
     });
 
@@ -44,7 +67,10 @@ Deno.serve(async (req) => {
       throw new Error(data.error.message);
     }
     
-    const reply = data.candidates[0].content.parts[0].text;
+    const rawReply = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const trimmedReply = rawReply.trim();
+    const reply = trimmedReply.length === 0 ? refusalMessage : trimmedReply;
+
     console.log("5. Success! Sending reply back to Flutter.");
 
     return new Response(JSON.stringify({ reply }), {

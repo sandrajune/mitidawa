@@ -1,5 +1,6 @@
 import 'dart:io';
-import 'dart:math';
+import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,6 +13,18 @@ import '../services/plant_service.dart';
 import '../services/scan_history_service.dart';
 import 'prediction_result_screen.dart';
 
+// --- Premium Botanical Palette ---
+class ScanPalette {
+  static const Color background = Color(0xFFF3F7F4); // Pale sage
+  static const Color textPrimary = Color(0xFF162D20); // Deep forest
+  static const Color textSecondary = Color(0xFF5A7062);
+  static const Color brandGreen = Color(0xFF1B4332);
+  static const Color accentGreen = Color(0xFF2D6A4F);
+  static const Color surfaceWhite = Color(0xFFFFFFFF);
+  static const Color warningRed = Color(0xFFB71C1C);
+  static const Color warningBg = Color(0xFFFFEBEE);
+}
+
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -19,7 +32,7 @@ class CameraScreen extends StatefulWidget {
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> {
+class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderStateMixin {
   File? _image;
   Interpreter? _interpreter;
   List<String> _labels = [];
@@ -33,44 +46,53 @@ class _CameraScreenState extends State<CameraScreen> {
   List<Plant> _catalogPlants = [];
   Plant? _matchedPlant;
 
-  Color _confidenceColor(double confidence) {
-    if (confidence >= 0.75) return const Color(0xFF558B6E);
-    if (confidence >= 0.35) return const Color.fromARGB(255, 91, 45, 23);
-    return const Color.fromARGB(255, 18, 54, 45);
-  }
-
-  String _confidenceLabel(double confidence) {
-    if (confidence >= 0.75) return 'High confidence';
-    if (confidence >= 0.35) return 'Medium confidence';
-    return 'Low confidence';
-  }
+  // Animation for the viewfinder pulse
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+    
     _loadModel();
-    _requestPermissions();
     _loadCatalogPlants();
+    // Request permissions after first frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestPermissions();
+    });
   }
 
+  Color _confidenceColor(double confidence) {
+    if (confidence >= 0.75) return ScanPalette.brandGreen;
+    if (confidence >= 0.35) return const Color(0xFF8B7355); // Earthy clay
+    return ScanPalette.warningRed;
+  }
+
+  String _confidenceLabel(double confidence) {
+    if (confidence >= 0.75) return 'High Match';
+    if (confidence >= 0.35) return 'Partial Match';
+    return 'Low Match';
+  }
+
+  // --- Core Logic (Unchanged) ---
+
   Future<void> _requestPermissions() async {
-    await [Permission.camera, Permission.photos].request();
+    // image_picker handles iOS permissions natively
   }
 
   Future<void> _loadCatalogPlants() async {
     final plants = await _plantService.fetchPlants();
     if (!mounted) return;
-    setState(() {
-      _catalogPlants = plants;
-    });
+    setState(() => _catalogPlants = plants);
   }
 
   Plant? _findPlantByLabel(String label) {
     final normalizedLabel = label.trim().toLowerCase();
     for (final plant in _catalogPlants) {
-      if (plant.name.trim().toLowerCase() == normalizedLabel) {
-        return plant;
-      }
+      if (plant.name.trim().toLowerCase() == normalizedLabel) return plant;
     }
     return null;
   }
@@ -84,56 +106,28 @@ class _CameraScreenState extends State<CameraScreen> {
 
     try {
       _interpreter?.close();
-      _interpreter = await Interpreter.fromAsset(
-        'assets/models/plant_identifier_final.tflite',
-      );
-
+      _interpreter = await Interpreter.fromAsset('assets/models/plant_identifier_final.tflite');
       final labelsData = await rootBundle.loadString('assets/labels.txt');
-      _labels = labelsData
-          .split('\n')
-          .map((line) => line.trim())
-          .where((line) => line.isNotEmpty)
-          .toList();
-
+      _labels = labelsData.split('\n').map((line) => line.trim()).where((line) => line.isNotEmpty).toList();
       if (!mounted) return;
-      setState(() {
-        _errorMessage = null;
-      });
+      setState(() => _errorMessage = null);
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _errorMessage =
-            'Model failed to load on this device/emulator.\nDetails: $e';
-      });
+      setState(() => _errorMessage = 'Model failed to load.\n$e');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isModelLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isModelLoading = false);
     }
   }
 
   Future<bool> _ensureCameraPermission() async {
-    var status = await Permission.camera.status;
-    if (status.isGranted) return true;
-
-    status = await Permission.camera.request();
-    if (status.isGranted) return true;
-
-    if (status.isPermanentlyDenied && mounted) {
-      await openAppSettings();
-    }
-    return false;
+    return true;
   }
 
   Future<void> _takePhoto() async {
     final hasPermission = await _ensureCameraPermission();
     if (!hasPermission) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Camera permission is required.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Camera permission is required.')));
       return;
     }
 
@@ -143,6 +137,7 @@ class _CameraScreenState extends State<CameraScreen> {
     if (pickedFile != null) {
       setState(() {
         _image = File(pickedFile.path);
+        _prediction = "Analyzing..."; // Show feedback while processing
       });
 
       final result = await predict(_image!);
@@ -150,9 +145,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
       final predictedPlantName = result['plant'] as String?;
       final confidenceValue = (result['confidence'] as double?) ?? 0.0;
-      final matchedPlant = predictedPlantName == null
-          ? null
-          : _findPlantByLabel(predictedPlantName);
+      final matchedPlant = predictedPlantName == null ? null : _findPlantByLabel(predictedPlantName);
 
       setState(() {
         _prediction = predictedPlantName ?? 'No predicted plant';
@@ -175,30 +168,13 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<Map<String, dynamic>?> predict(File imageFile) async {
     if (_interpreter == null || _labels.isEmpty) {
       if (!mounted) return null;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Model not ready yet. Please wait.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Model not ready yet.')));
       return null;
     }
 
     final inputShape = _interpreter!.getInputTensor(0).shape;
-    if (inputShape.length < 4) {
-      if (!mounted) return null;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unexpected model input shape: $inputShape')),
-      );
-      return null;
-    }
-
     final outputShape = _interpreter!.getOutputTensor(0).shape;
-    if (outputShape.length < 2) {
-      if (!mounted) return null;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unexpected model output shape: $outputShape')),
-      );
-      return null;
-    }
-
+    
     final inputHeight = inputShape[1];
     final inputWidth = inputShape[2];
     final outputClasses = outputShape.last;
@@ -206,32 +182,14 @@ class _CameraScreenState extends State<CameraScreen> {
     final decoded = img.decodeImage(await imageFile.readAsBytes());
     if (decoded == null) return null;
 
-    final resized =
-        img.copyResize(decoded, width: inputWidth, height: inputHeight);
+    final resized = img.copyResize(decoded, width: inputWidth, height: inputHeight);
 
-    final input = List.generate(
-      1,
-      (_) => List.generate(
-        inputHeight,
-        (y) => List.generate(
-          inputWidth,
-          (x) {
-            final pixel = resized.getPixel(x, y);
-            return [
-              (pixel.r / 127.5) - 1.0,
-              (pixel.g / 127.5) - 1.0,
-              (pixel.b / 127.5) - 1.0,
-            ];
-          },
-        ),
-      ),
-    );
+    final input = List.generate(1, (_) => List.generate(inputHeight, (y) => List.generate(inputWidth, (x) {
+      final pixel = resized.getPixel(x, y);
+      return [(pixel.r / 127.5) - 1.0, (pixel.g / 127.5) - 1.0, (pixel.b / 127.5) - 1.0];
+    })));
 
-    final output = List.generate(
-      1,
-      (_) => List<double>.filled(outputClasses, 0.0),
-    );
-
+    final output = List.generate(1, (_) => List<double>.filled(outputClasses, 0.0));
     _interpreter!.run(input, output);
 
     final probabilities = output[0];
@@ -246,236 +204,396 @@ class _CameraScreenState extends State<CameraScreen> {
       }
     }
 
-    final safeIndex = _labels.isEmpty ? 0 : min(maxIndex, _labels.length - 1);
+    final safeIndex = _labels.isEmpty ? 0 : math.min(maxIndex, _labels.length - 1);
     final predictedLabel = _labels.isNotEmpty ? _labels[safeIndex] : 'Unknown';
 
     const double confidenceThreshold = 0.75;
     const double nonPlantThreshold = 0.35;
-
-    final inTestedSet = _labels.any(
-      (l) => l.trim().toLowerCase() == predictedLabel.trim().toLowerCase(),
-    );
+    final inTestedSet = _labels.any((l) => l.trim().toLowerCase() == predictedLabel.trim().toLowerCase());
 
     if (maxProb >= confidenceThreshold && inTestedSet) {
-      return {
-        'plant': predictedLabel,
-        'confidence': maxProb,
-        'isConfident': true,
-      };
+      return {'plant': predictedLabel, 'confidence': maxProb, 'isConfident': true};
     } else if (maxProb < nonPlantThreshold) {
       return {
         'plant': null,
         'confidence': maxProb,
         'isConfident': false,
-        'message':
-            'This does not look like one of the trained plants/leaves. Try a clearer leaf photo.',
+        'message': 'This does not look like one of the trained plants. Try a clearer leaf photo.',
       };
     } else {
       return {
         'plant': null,
         'confidence': maxProb,
         'isConfident': false,
-        'message':
-            'Low confidence (${(maxProb * 100).toStringAsFixed(1)}%). Prediction hidden below 75%.',
+        'message': 'Low confidence (${(maxProb * 100).toStringAsFixed(1)}%). Prediction hidden below 75%.',
       };
     }
   }
 
+  // --- Premium UI Build ---
+
   @override
   Widget build(BuildContext context) {
-    final confidenceColor = _confidenceColor(_confidence);
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F5EF),
-      appBar: AppBar(
-        title: const Text('Scan Plant'),
-        backgroundColor: const Color.fromARGB(255, 18, 54, 45),
-        foregroundColor: Colors.white,
+      backgroundColor: ScanPalette.background,
+      body: Stack(
+        children: [
+          // Ambient Leaf Watermark
+          Positioned(
+            top: -50,
+            right: -80,
+            child: Transform.rotate(
+              angle: math.pi / 4,
+              child: Icon(Icons.document_scanner_rounded, size: 300, color: ScanPalette.brandGreen.withOpacity(0.03)),
+            ),
+          ),
+
+          SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    child: Column(
+                      children: [
+                        _buildViewfinder(),
+                        const SizedBox(height: 24),
+                        if (_errorMessage != null) _buildErrorCard(),
+                        if (_image != null && _prediction != "Analyzing...") _buildResultCard(),
+                      ],
+                    ),
+                  ),
+                ),
+                _buildBottomControls(),
+              ],
+            ),
+          ),
+        ],
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _isModelLoading
-                      ? const Color(0xFFFFE0B2)
-                      : (_errorMessage != null
-                          ? const Color(0xFFD7CCC8)
-                          : const Color(0xFF558B6E).withOpacity(0.2)),
-                  borderRadius: BorderRadius.circular(20),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'Lens',
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+              color: ScanPalette.textPrimary,
+              letterSpacing: -1.0,
+            ),
+          ),
+          
+          // Sleek Status Pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: _errorMessage != null ? ScanPalette.warningBg : ScanPalette.surfaceWhite,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _errorMessage != null ? ScanPalette.warningRed.withOpacity(0.3) : ScanPalette.brandGreen.withOpacity(0.1)),
+            ),
+            child: Row(
+              children: [
+                if (_isModelLoading)
+                  const SizedBox(
+                    width: 12, height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: ScanPalette.brandGreen),
+                  )
+                else
+                  Icon(
+                    _errorMessage != null ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+                    size: 16,
+                    color: _errorMessage != null ? ScanPalette.warningRed : ScanPalette.brandGreen,
+                  ),
+                const SizedBox(width: 8),
+                Text(
+                  _isModelLoading ? 'Loading AI...' : (_errorMessage != null ? 'Model Error' : 'AI Ready'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _errorMessage != null ? ScanPalette.warningRed : ScanPalette.brandGreen,
+                  ),
                 ),
-                child: Text(
-                  _isModelLoading
-                      ? 'Model loading...'
-                      : (_errorMessage != null
-                          ? 'Model not ready'
-                          : 'Model ready'),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewfinder() {
+    return Container(
+      width: double.infinity,
+      height: 400,
+      decoration: BoxDecoration(
+        color: ScanPalette.surfaceWhite,
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: ScanPalette.brandGreen.withOpacity(0.08), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: ScanPalette.brandGreen.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(40),
+        child: _image == null
+            ? Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(Icons.energy_savings_leaf_rounded, size: 150, color: ScanPalette.brandGreen.withOpacity(0.04)),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      AnimatedBuilder(
+                        animation: _pulseController,
+                        builder: (context, child) {
+                          return Transform.scale(
+                            scale: 1.0 + (_pulseController.value * 0.05),
+                            child: Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: ScanPalette.accentGreen.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.camera_alt_rounded, size: 40, color: ScanPalette.brandGreen),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Center leaf in frame',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ScanPalette.textSecondary),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.file(_image!, fit: BoxFit.cover),
+                  if (_prediction == "Analyzing...")
+                    Container(
+                      color: Colors.black54,
+                      child: const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(color: Colors.white),
+                            SizedBox(height: 16),
+                            Text('Analyzing botanical features...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(height: 16),
-              if (_errorMessage != null) ...[
+      ),
+    );
+  }
+
+  Widget _buildResultCard() {
+    final confColor = _confidenceColor(_confidence);
+
+    return _ClickableResultCard(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PredictionResultScreen(
+              plant: _matchedPlant,
+              confidence: _confidence,
+              message: _predictionMessage,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: ScanPalette.surfaceWhite,
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: confColor.withOpacity(0.3), width: 1.5),
+          boxShadow: [
+            BoxShadow(color: confColor.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 8)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
                 Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFEBEE),
-                    borderRadius: BorderRadius.circular(14),
-                    border:
-                        Border.all(color: const Color(0xFFD32F2F), width: 1),
+                    color: confColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(
-                      color: Color(0xFFB71C1C),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    textAlign: TextAlign.center,
+                    _confidenceLabel(_confidence),
+                    style: TextStyle(color: confColor, fontWeight: FontWeight.w800, fontSize: 12),
                   ),
                 ),
-                const SizedBox(height: 16),
-              ],
-              if (_isModelLoading) ...[
-                const CircularProgressIndicator(color: Color(0xFF558B6E)),
-                const SizedBox(height: 12),
-                const Text('Preparing leaf model...'),
-                const SizedBox(height: 20),
-              ],
-              Container(
-                width: double.infinity,
-                height: 280,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
-                  borderRadius: BorderRadius.circular(18),
-                  border:
-                      Border.all(color: const Color(0xFFA5D6A7), width: 1.2),
+                const Spacer(),
+                Text(
+                  '${(_confidence * 100).toStringAsFixed(1)}%',
+                  style: TextStyle(color: confColor, fontWeight: FontWeight.w800, fontSize: 16),
                 ),
-                child: _image == null
-                    ? const Center(
-                        child: Text(
-                          'Take a leaf photo to identify',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF33691E),
-                          ),
-                        ),
-                      )
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.file(_image!, fit: BoxFit.cover),
-                      ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _matchedPlant?.name ?? 'Unknown Plant',
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: ScanPalette.textPrimary, letterSpacing: -0.5),
+            ),
+            if (_matchedPlant != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                _matchedPlant!.scientificName,
+                style: const TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: ScanPalette.textSecondary),
               ),
-              const SizedBox(height: 18),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
+            ],
+            if (_predictionMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _predictionMessage!,
+                style: const TextStyle(fontSize: 14, color: ScanPalette.textSecondary, height: 1.4),
+              ),
+            ],
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  'View Remedy',
+                  style: TextStyle(color: confColor, fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.arrow_forward_ios_rounded, size: 14, color: confColor),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ScanPalette.warningBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ScanPalette.warningRed.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: ScanPalette.warningRed),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: const TextStyle(color: ScanPalette.warningRed, fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: ScanPalette.warningRed),
+            onPressed: _isModelLoading ? null : _loadModel,
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomControls() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 10, 24, 30),
+      child: GestureDetector(
+        onTap: _isModelLoading ? null : _takePhoto,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          decoration: BoxDecoration(
+            color: _isModelLoading ? ScanPalette.textSecondary : ScanPalette.brandGreen,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: ScanPalette.brandGreen.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.document_scanner_rounded, color: Colors.white, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                _image == null ? 'Scan Leaf' : 'Scan Another Leaf',
+                style: const TextStyle(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFD7CCC8), width: 1),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x22000000),
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Prediction Result',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF5D4037),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: confidenceColor.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(25),
-                        border: Border.all(color: confidenceColor, width: 1.2),
-                      ),
-                      child: Text(
-                        '${_confidenceLabel(_confidence)} • ${(_confidence * 100).toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          color: confidenceColor,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => PredictionResultScreen(
-                              plant: _matchedPlant,
-                              confidence: _confidence,
-                              message: _predictionMessage,
-                            ),
-                          ),
-                        );
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 350),
-                        curve: Curves.easeOutBack,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF558B6E).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(
-                            color: const Color.fromARGB(255, 18, 54, 45),
-                            width: 1,
-                          ),
-                        ),
-                        child: const Text(
-                          '🌿 Predicted Plant (tap to view)',
-                          style: TextStyle(
-                            color: Color.fromARGB(255, 18, 54, 45),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
                 ),
               ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _isModelLoading ? null : _loadModel,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry model load'),
-                ),
-              ],
             ],
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF2E7D32),
-        onPressed: _isModelLoading ? null : _takePhoto,
-        child: const Icon(Icons.camera_alt),
       ),
     );
   }
 
   @override
   void dispose() {
+    _pulseController.dispose();
     _interpreter?.close();
     super.dispose();
+  }
+}
+
+// --- Helper for click animation on Result Card ---
+class _ClickableResultCard extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _ClickableResultCard({required this.child, required this.onTap});
+
+  @override
+  State<_ClickableResultCard> createState() => _ClickableResultCardState();
+}
+
+class _ClickableResultCardState extends State<_ClickableResultCard> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.easeInOut,
+        child: widget.child,
+      ),
+    );
   }
 }

@@ -1,10 +1,23 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_screen.dart';
 import 'scan_history_screen.dart';
+
+// --- Premium Botanical Palette ---
+class ProfilePalette {
+  static const Color background = Color(0xFFF3F7F4); // Pale sage
+  static const Color textPrimary = Color(0xFF162D20); // Deep forest
+  static const Color textSecondary = Color(0xFF5A7062);
+  static const Color brandGreen = Color(0xFF1B4332);
+  static const Color accentGreen = Color(0xFF2D6A4F);
+  static const Color surfaceWhite = Color(0xFFFFFFFF);
+  static const Color borderLight = Color(0xFFEAECEB);
+  static const Color dangerRed = Color(0xFFD32F2F);
+  static const Color dangerLight = Color(0xFFFFEBEE);
+}
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,13 +28,15 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _showDisclaimer = false;
-  final bool _notificationsEnabled = true;
-  final bool _darkModeEnabled = false;
-  final String _language = 'English';
+  
+  // Settings states (Visual only for this UI, connect to backend if needed)
+  bool _notificationsEnabled = true;
+  bool _darkModeEnabled = false;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  
   String? _avatarUrl;
   bool _isUploading = false;
 
@@ -33,12 +48,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserProfile();
   }
 
-  // 1. Load data from Supabase Auth Metadata
+  // --- Preserved Backend Logic ---
+  
   void _loadUserProfile() {
     final user = supabase.auth.currentUser;
     if (user != null) {
       setState(() {
-        _nameController.text = user.userMetadata?['name'] ?? "Miti Dawa User";
+        _nameController.text = user.userMetadata?['name'] ?? "MitiDawa User";
         _bioController.text = user.userMetadata?['bio'] ?? "";
         _emailController.text = user.email ?? "";
         _avatarUrl = user.userMetadata?['avatar_url'];
@@ -46,7 +62,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // 2. Save Name & Bio to Supabase Metadata
   Future<void> _updateProfileMetadata() async {
     try {
       await supabase.auth.updateUser(
@@ -56,48 +71,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }),
       );
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green),
+        const SnackBar(content: Text('Profile updated successfully!'), backgroundColor: ProfilePalette.accentGreen),
       );
     } catch (e) {
       debugPrint("Error updating profile: $e");
     }
   }
 
-  // 3. Update Email Address
   Future<void> _updateEmail() async {
     try {
       final newEmail = _emailController.text.trim();
-      if (newEmail.isEmpty || newEmail == supabase.auth.currentUser?.email) {
-        return;
-      }
+      if (newEmail.isEmpty || newEmail == supabase.auth.currentUser?.email) return;
 
       await supabase.auth.updateUser(UserAttributes(email: newEmail));
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-              'Confirmation link sent! Please check your new email inbox to verify the change.'),
+          content: Text('Confirmation link sent! Please check your new email inbox.'),
           backgroundColor: Colors.blue,
           duration: Duration(seconds: 5),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Error updating email: $e'),
-            backgroundColor: Colors.red),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating email: $e'), backgroundColor: ProfilePalette.dangerRed));
     }
   }
 
-  // 4. Upload Photo to Supabase Storage
   Future<void> _selectProfilePicture() async {
     try {
       final picker = ImagePicker();
-      final imageFile =
-          await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+      final imageFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
       if (imageFile == null) return;
 
       setState(() => _isUploading = true);
@@ -106,15 +108,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final fileExtension = imageFile.path.split('.').last;
       final fileName = '${user!.id}/profile.$fileExtension';
 
-      await supabase.storage.from('avatars').upload(
-            fileName,
-            File(imageFile.path),
-            fileOptions: const FileOptions(upsert: true),
-          );
-
+      await supabase.storage.from('avatars').upload(fileName, File(imageFile.path), fileOptions: const FileOptions(upsert: true));
       final publicUrl = supabase.storage.from('avatars').getPublicUrl(fileName);
-      await supabase.auth
-          .updateUser(UserAttributes(data: {'avatar_url': publicUrl}));
+      await supabase.auth.updateUser(UserAttributes(data: {'avatar_url': publicUrl}));
 
       setState(() {
         _avatarUrl = publicUrl;
@@ -122,28 +118,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     } catch (e) {
       setState(() => _isUploading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Error uploading image: $e'),
-            backgroundColor: Colors.red),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error uploading image: $e'), backgroundColor: ProfilePalette.dangerRed));
     }
   }
 
-  // 5. Send Password Reset Email
   Future<void> _resetPassword() async {
     final email = supabase.auth.currentUser?.email;
     if (email != null) {
       await supabase.auth.resetPasswordForEmail(email);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Password reset link sent to your email!'),
-            backgroundColor: Colors.green),
+        const SnackBar(content: Text('Password reset link sent to your email!'), backgroundColor: ProfilePalette.accentGreen),
       );
     }
   }
 
-  // 6. Logout
   Future<void> _logout() async {
     await supabase.auth.signOut();
     if (mounted) {
@@ -161,217 +149,408 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  // --- Premium UI ---
+
   @override
   Widget build(BuildContext context) {
-    const creamBackground = Color(0xFFF4FBF8);
-    const darkBrown = Color.fromARGB(255, 243, 184, 157);
-    const deepGreen = Color.fromARGB(255, 18, 54, 45);
-    const bubbleGreen = Color.fromARGB(174, 132, 195, 149);
-    const bubbleOrange = Color.fromARGB(255, 217, 148, 117);
-
     return Scaffold(
-      backgroundColor: creamBackground,
-      appBar: AppBar(
-        title: Text('Profile',
-            style: GoogleFonts.nunitoSans(fontWeight: FontWeight.w800)),
-        backgroundColor: deepGreen,
-        foregroundColor: Colors.white,
-        elevation: 2,
-        // Removed logout icon from here!
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // --- Profile Picture ---
-            Stack(
-              alignment: Alignment.bottomRight,
-              children: [
-                CircleAvatar(
-                  radius: 60,
-                  backgroundColor: bubbleGreen.withValues(alpha: 0.35),
-                  backgroundImage:
-                      _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
-                  child: _avatarUrl == null
-                      ? const Icon(Icons.person, size: 60, color: Colors.white)
-                      : null,
-                ),
-                if (_isUploading)
-                  const Positioned.fill(
-                      child: CircularProgressIndicator(color: deepGreen)),
-                Positioned(
-                  bottom: 4,
-                  right: 4,
-                  child: GestureDetector(
-                    onTap: _selectProfilePicture,
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        color: darkBrown,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                              color: Colors.black26,
-                              offset: Offset(0, 2),
-                              blurRadius: 4)
-                        ],
-                      ),
-                      padding: const EdgeInsets.all(6),
-                      child: const Icon(Icons.camera_alt,
-                          color: Colors.white, size: 20),
+      backgroundColor: ProfilePalette.background,
+      body: Stack(
+        children: [
+          // Subtle Ambient Background Watermark
+          Positioned(
+            top: -100,
+            left: -50,
+            child: Icon(Icons.spa_rounded, size: 400, color: ProfilePalette.brandGreen.withOpacity(0.03)),
+          ),
+
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                pinned: true,
+                expandedHeight: 80,
+                flexibleSpace: FlexibleSpaceBar(
+                  titlePadding: const EdgeInsets.only(left: 24, bottom: 16),
+                  title: const Text(
+                    'Profile',
+                    style: TextStyle(
+                      color: ProfilePalette.textPrimary,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
                     ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 18),
-
-            // --- Editable Name ---
-            SizedBox(
-              width: 280,
-              child: TextField(
-                controller: _nameController,
-                textAlign: TextAlign.center,
-                onSubmitted: (_) => _updateProfileMetadata(),
-                style: GoogleFonts.montserrat(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: deepGreen),
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  hintText: "Enter your name",
-                  hintStyle: GoogleFonts.montserrat(
-                      fontWeight: FontWeight.w300,
-                      color: deepGreen.withValues(alpha: 0.5)),
-                ),
               ),
-            ),
-
-            // --- Editable Bio ---
-            SizedBox(
-              width: 280,
-              child: TextField(
-                controller: _bioController,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                onSubmitted: (_) => _updateProfileMetadata(),
-                style: GoogleFonts.nunitoSans(
-                    fontSize: 16, color: const Color.fromARGB(255, 32, 30, 29)),
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  hintText: "Add a bio about your natural remedy journey...",
-                  hintStyle: GoogleFonts.nunitoSans(
-                      fontStyle: FontStyle.italic,
-                      color: const Color.fromARGB(255, 27, 26, 26)
-                          .withValues(alpha: 0.5)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            const SizedBox(height: 28),
-
-            _tile(
-              'Saved Remedies',
-              Icons.bookmark,
-              deepGreen,
-              bubbleGreen,
-            ),
-            _tile(
-              'Scan History',
-              Icons.history,
-              deepGreen,
-              bubbleGreen,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const ScanHistoryScreen(),
-                  ),
-                );
-              },
-            ),
-
-            const SizedBox(height: 32),
-            _settingsCard(darkBrown, deepGreen),
-            const SizedBox(height: 32),
-
-            GestureDetector(
-              onTap: () => setState(() => _showDisclaimer = !_showDisclaimer),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: deepGreen,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Disclaimer',
-                        style: GoogleFonts.nunitoSans(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800)),
-                    if (_showDisclaimer) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                          'Always consult a doctor. Natural remedies are not a replacement for medical advice.',
-                          style: GoogleFonts.nunitoSans(color: Colors.white70)),
+              
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  child: Column(
+                    children: [
+                      _buildIdentityCard(),
+                      const SizedBox(height: 24),
+                      _buildQuickActions(),
+                      const SizedBox(height: 32),
+                      _buildSettingsGroup(),
+                      const SizedBox(height: 32),
+                      _buildLogoutButton(),
+                      const SizedBox(height: 120), // Padding for bottom nav bar
                     ],
-                  ],
+                  ),
                 ),
               ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 1. The Identity Card (Apple Contact Style)
+  Widget _buildIdentityCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: ProfilePalette.surfaceWhite,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: ProfilePalette.borderLight, width: 1),
+        boxShadow: [
+          BoxShadow(color: ProfilePalette.brandGreen.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10)),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Avatar Stack
+          Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ProfilePalette.accentGreen.withOpacity(0.2), width: 2),
+                ),
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundColor: ProfilePalette.background,
+                  backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
+                  child: _avatarUrl == null
+                      ? const Icon(Icons.person_rounded, size: 40, color: ProfilePalette.textSecondary)
+                      : null,
+                ),
+              ),
+              if (_isUploading)
+                const Positioned.fill(child: CircularProgressIndicator(color: ProfilePalette.brandGreen, strokeWidth: 3)),
+              
+              // Camera Edit Badge
+              GestureDetector(
+                onTap: _selectProfilePicture,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: ProfilePalette.brandGreen,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: ProfilePalette.surfaceWhite, width: 3),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4)),
+                    ],
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Invisible Editable Name Field
+          TextField(
+            controller: _nameController,
+            textAlign: TextAlign.center,
+            onSubmitted: (_) => _updateProfileMetadata(),
+            textInputAction: TextInputAction.done,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: ProfilePalette.textPrimary, letterSpacing: -0.5),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              hintText: "Enter your name",
+              hintStyle: TextStyle(color: ProfilePalette.textSecondary),
             ),
+          ),
+          
+          // Invisible Editable Bio Field
+          TextField(
+            controller: _bioController,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            minLines: 1,
+            onSubmitted: (_) => _updateProfileMetadata(),
+            textInputAction: TextInputAction.done,
+            style: const TextStyle(fontSize: 15, color: ProfilePalette.textSecondary, height: 1.4),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              hintText: "Add a bio about your natural remedy journey...",
+              hintStyle: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: ProfilePalette.background,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _emailController.text.isEmpty ? "No Email" : _emailController.text,
+              style: const TextStyle(fontSize: 13, color: ProfilePalette.textSecondary, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 32),
+  // 2. Quick Actions
+  Widget _buildQuickActions() {
+    return Row(
+      children: [
+        Expanded(
+          child: _QuickActionButton(
+            title: 'Saved',
+            icon: Icons.bookmark_rounded,
+            color: const Color(0xFF8B7355), // Earthy brown
+            onTap: () {
+              // Navigate to Saved Remedies
+            },
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _QuickActionButton(
+            title: 'History',
+            icon: Icons.history_rounded,
+            color: ProfilePalette.accentGreen,
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ScanHistoryScreen()));
+            },
+          ),
+        ),
+      ],
+    );
+  }
 
-            // --- Logout Button (Moved here!) ---
-            _tile(
-                'Logout',
-                Icons.logout,
-                Colors
-                    .red, // Making it red to stand out as a destructive action
-                bubbleOrange.withValues(alpha: 0.3),
-                onTap: _logout),
-            const SizedBox(height: 16),
+  // 3. Apple-Style Settings Group
+  Widget _buildSettingsGroup() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 8, bottom: 8),
+          child: Text(
+            'ACCOUNT & PREFERENCES',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: ProfilePalette.textSecondary, letterSpacing: 1.2),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: ProfilePalette.surfaceWhite,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: ProfilePalette.borderLight, width: 1),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+            ],
+          ),
+          child: Column(
+            children: [
+              _SettingsTile(
+                icon: Icons.notifications_rounded,
+                title: 'Notifications',
+                trailing: Switch.adaptive(
+                  value: _notificationsEnabled,
+                  activeColor: ProfilePalette.brandGreen,
+                  onChanged: (val) => setState(() => _notificationsEnabled = val),
+                ),
+              ),
+              _buildDivider(),
+              _SettingsTile(
+                icon: Icons.lock_reset_rounded,
+                title: 'Reset Password',
+                onTap: _resetPassword,
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: ProfilePalette.borderLight),
+              ),
+              _buildDivider(),
+              _SettingsTile(
+                icon: Icons.shield_rounded,
+                title: 'Medical Disclaimer',
+                onTap: () => setState(() => _showDisclaimer = !_showDisclaimer),
+                trailing: Icon(_showDisclaimer ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: ProfilePalette.textSecondary),
+              ),
+              // Animated Disclaimer Dropdown
+              AnimatedCrossFade(
+                firstChild: const SizedBox(width: double.infinity),
+                secondChild: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: ProfilePalette.background,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: ProfilePalette.brandGreen.withOpacity(0.1)),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline_rounded, color: ProfilePalette.brandGreen, size: 20),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Always consult a certified medical professional. Natural remedies are for holistic support and are not a replacement for medical advice or prescribed treatments.',
+                            style: TextStyle(fontSize: 13, color: ProfilePalette.textSecondary, height: 1.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                crossFadeState: _showDisclaimer ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                duration: const Duration(milliseconds: 200),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 4. Elegant Destructive Action
+  Widget _buildLogoutButton() {
+    return GestureDetector(
+      onTap: _logout,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          color: ProfilePalette.dangerLight,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: ProfilePalette.dangerRed.withOpacity(0.2)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout_rounded, color: ProfilePalette.dangerRed, size: 20),
+            SizedBox(width: 8),
+            Text(
+              'Sign Out',
+              style: TextStyle(color: ProfilePalette.dangerRed, fontSize: 16, fontWeight: FontWeight.w700),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _settingsCard(Color darkBrown, Color deepGreen) {
-    // Note: I left this empty just to keep the code block shorter,
-    // simply paste your existing _settingsCard logic exactly as it was here!
-    return Container();
+  Widget _buildDivider() {
+    return Divider(height: 1, thickness: 1, color: ProfilePalette.borderLight, indent: 56);
   }
+}
 
-  Widget _tile(String label, IconData icon, Color iconColor, Color bgColor,
-      {VoidCallback? onTap}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: iconColor.withValues(alpha: 0.15),
-              blurRadius: 8,
-              offset: const Offset(0, 3))
-        ],
-      ),
-      child: ListTile(
-        leading: Container(
-          decoration: BoxDecoration(shape: BoxShape.circle, color: bgColor),
-          padding: const EdgeInsets.all(8),
-          child: Icon(icon, color: iconColor),
+// --- Reusable UI Components ---
+
+class _QuickActionButton extends StatefulWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionButton({required this.title, required this.icon, required this.color, required this.onTap});
+
+  @override
+  State<_QuickActionButton> createState() => _QuickActionButtonState();
+}
+
+class _QuickActionButtonState extends State<_QuickActionButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.95 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          decoration: BoxDecoration(
+            color: ProfilePalette.surfaceWhite,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: ProfilePalette.borderLight, width: 1),
+            boxShadow: [
+              BoxShadow(color: widget.color.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 6)),
+            ],
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: widget.color.withOpacity(0.1), shape: BoxShape.circle),
+                child: Icon(widget.icon, color: widget.color, size: 24),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                widget.title,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ProfilePalette.textPrimary),
+              ),
+            ],
+          ),
         ),
-        title: Text(label,
-            style: GoogleFonts.montserrat(
-                color: iconColor, fontWeight: FontWeight.w600, fontSize: 17)),
-        trailing: Icon(Icons.arrow_forward_ios,
-            size: 18, color: iconColor.withValues(alpha: 0.7)),
-        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget trailing;
+  final VoidCallback? onTap;
+
+  const _SettingsTile({required this.icon, required this.title, required this.trailing, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: ProfilePalette.background, borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, color: ProfilePalette.brandGreen, size: 20),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ProfilePalette.textPrimary),
+              ),
+            ),
+            trailing,
+          ],
+        ),
       ),
     );
   }

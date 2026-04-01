@@ -62,18 +62,18 @@ class Plant {
       scientificName:
           (data['scientificName'] ?? data['scientific_name'] ?? '').toString(),
       commonUses: (data['commonUses'] ?? data['common_uses'] ?? '').toString(),
-      localNames: (data['localNames'] ??
-              data['local_names'] ??
-              data['local name'] ??
-              data['local_name'] ??
-              '')
-          .toString(),
-      uses: (data['uses'] ??
-              data['plant_uses'] ??
-              data['medicinal_uses'] ??
-              data['traditional_uses'] ??
-              '')
-          .toString(),
+      localNames: _asStringList(
+  data['localNames'] ?? data['local_names'] ?? data['local_name'] ?? [],
+).join(', '),
+uses: () {
+  final raw = data['uses'] ?? data['plant_uses'] ?? data['medicinal_uses'] ?? '';
+  if (raw is List) {
+    return raw.map((e) => e is Map
+        ? '${e['category'] ?? ''}: ${e['description'] ?? ''}'
+        : e.toString()).join('\n');
+  }
+  return raw.toString();
+}(),
       description: (data['description'] ?? '').toString(),
       primaryImageUrl: (data['primary_url'] ??
               data['primary_image_url'] ??

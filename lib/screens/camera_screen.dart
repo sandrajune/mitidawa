@@ -93,6 +93,7 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
     final normalizedLabel = label.trim().toLowerCase();
     for (final plant in _catalogPlants) {
       if (plant.name.trim().toLowerCase() == normalizedLabel) return plant;
+      if (plant.scientificName.trim().toLowerCase() == normalizedLabel) return plant;
     }
     return null;
   }
@@ -123,7 +124,7 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
     return true;
   }
 
-  Future<void> _takePhoto() async {
+  Future<void> _takePhoto({bool fromGallery = false}) async {
     final hasPermission = await _ensureCameraPermission();
     if (!hasPermission) {
       if (!mounted) return;
@@ -132,7 +133,9 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
     }
 
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.camera);
+    final pickedFile = await picker.pickImage(
+      source: fromGallery ? ImageSource.gallery : ImageSource.camera,
+    );
 
     if (pickedFile != null) {
       setState(() {
@@ -207,8 +210,8 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
     final safeIndex = _labels.isEmpty ? 0 : math.min(maxIndex, _labels.length - 1);
     final predictedLabel = _labels.isNotEmpty ? _labels[safeIndex] : 'Unknown';
 
-    const double confidenceThreshold = 0.75;
-    const double nonPlantThreshold = 0.35;
+    const double confidenceThreshold = 0.45;
+const double nonPlantThreshold = 0.15;
     final inTestedSet = _labels.any((l) => l.trim().toLowerCase() == predictedLabel.trim().toLowerCase());
 
     if (maxProb >= confidenceThreshold && inTestedSet) {
@@ -517,42 +520,62 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildBottomControls() {
+ Widget _buildBottomControls() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 10, 24, 30),
-      child: GestureDetector(
-        onTap: _isModelLoading ? null : _takePhoto,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          decoration: BoxDecoration(
-            color: _isModelLoading ? ScanPalette.textSecondary : ScanPalette.brandGreen,
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(
-                color: ScanPalette.brandGreen.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+      child: Row(
+        children: [
+          // Gallery button
+          GestureDetector(
+            onTap: _isModelLoading ? null : () => _takePhoto(fromGallery: true),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+              decoration: BoxDecoration(
+                color: ScanPalette.surfaceWhite,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: ScanPalette.brandGreen.withOpacity(0.3), width: 1.5),
               ),
-            ],
+              child: const Icon(Icons.photo_library_rounded, color: ScanPalette.brandGreen, size: 24),
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.document_scanner_rounded, color: Colors.white, size: 24),
-              const SizedBox(width: 12),
-              Text(
-                _image == null ? 'Scan Leaf' : 'Scan Another Leaf',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
+          const SizedBox(width: 12),
+          // Camera button
+          Expanded(
+            child: GestureDetector(
+              onTap: _isModelLoading ? null : () => _takePhoto(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                decoration: BoxDecoration(
+                  color: _isModelLoading ? ScanPalette.textSecondary : ScanPalette.brandGreen,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: ScanPalette.brandGreen.withOpacity(0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.document_scanner_rounded, color: Colors.white, size: 24),
+                    const SizedBox(width: 12),
+                    Text(
+                      _image == null ? 'Scan Leaf' : 'Scan Again',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

@@ -144,7 +144,7 @@ class _NatureMinimalistHomeView extends StatelessWidget {
                       // Action Cards
                       _CleanActionCard(
                         title: 'Plant Catalogue',
-                        subtitle: 'Browse 500+ botanical species',
+                        subtitle: 'Browse 59+ botanical species',
                         icon: Icons.energy_savings_leaf_outlined,
                         accentColor: AppColors.brandGreen,
                         watermarkIcon: Icons.grass_rounded,

@@ -17,7 +17,7 @@ class PredictionResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasPrediction = plant != null && confidence >= 0.75;
+    final hasPrediction = plant != null;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F5EF),

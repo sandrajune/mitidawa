@@ -235,7 +235,36 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
           ),
         ),
 
-        if (imageUrls.length > 1)
+        if (imageUrls.length > 1) ...[
+          Positioned(
+            top: 54,
+            left: 16,
+            right: 16,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.swipe_rounded, size: 16, color: Colors.white),
+                    SizedBox(width: 6),
+                    Text(
+                      'Swipe images',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
           Positioned(
             bottom: 60,
             left: 0,
@@ -257,6 +286,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
               ),
             ),
           ),
+        ],
       ],
     );
   }

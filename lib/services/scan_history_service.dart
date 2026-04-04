@@ -7,12 +7,16 @@ class ScanHistoryEntry {
   final double confidence;
   final String? message;
   final DateTime timestamp;
+  final String? imagePath;
+  final String? scientificName;
 
   const ScanHistoryEntry({
     required this.plantName,
     required this.confidence,
     required this.message,
     required this.timestamp,
+    this.imagePath,
+    this.scientificName,
   });
 
   Map<String, dynamic> toMap() {
@@ -21,6 +25,8 @@ class ScanHistoryEntry {
       'confidence': confidence,
       'message': message,
       'timestamp': timestamp.toIso8601String(),
+      'imagePath': imagePath,
+      'scientificName': scientificName,
     };
   }
 
@@ -31,6 +37,8 @@ class ScanHistoryEntry {
       message: map['message'] as String?,
       timestamp: DateTime.tryParse(map['timestamp'] as String? ?? '') ??
           DateTime.now(),
+      imagePath: map['imagePath'] as String?,
+      scientificName: map['scientificName'] as String?,
     );
   }
 }

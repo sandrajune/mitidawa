@@ -163,6 +163,8 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
           confidence: confidenceValue,
           message: _predictionMessage,
           timestamp: DateTime.now(),
+          imagePath: _image?.path,
+          scientificName: matchedPlant?.scientificName,
         ),
       );
     }
